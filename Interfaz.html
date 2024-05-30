@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>interfaz</title>
+    <style>
+        #video {
+            width: 30%;
+            height: 30%;
+        }
+        #canvas {
+            display: none;
+        }
+        #resultado {
+            font-size: 32px; /* Tamaño de fuente más grande */
+            font-weight: bold; /* Negrita */
+            color: rgb(0, 0, 0); /* Color del texto */
+            text-align: left; /* Alineación izquierda */
+            margin-top: 20px; /* Margen superior */
+        }
+    </style>
+    <!-- Cargar TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+</head>
+<body>
+    
+    <video id="video" autoplay></video>
+    <canvas id="canvas"></canvas>
+    <div id="resultado"></div> <!-- Elemento para mostrar el resultado -->
+    <script>
+        // Función para cargar el modelo TensorFlow.js
+        async function loadModel() {
+            const model = await tf.loadLayersModel('http://localhost:8000/modeloCV/model.json');
+            return model;
+        }
+
+        const img_height = 224; // Altura de la imagen requerida por tu modelo
+        const img_width = 224; // Anchura de la imagen requerida por tu modelo
+
+        // Función para procesar la imagen capturada con TensorFlow.js
+        async function processImage(model, canvas) {
+            const img = tf.browser.fromPixels(canvas); // Convertir el canvas a un tensor
+            const resizedImg = tf.image.resizeBilinear(img, [img_height, img_width]); // Redimensionar la imagen al tamaño requerido por el modelo
+            const expandedImg = resizedImg.expandDims(0); // Añadir una dimensión adicional para conformar al formato del modelo
+
+            // Realizar la predicción utilizando el modelo cargado
+            const predictions = await model.predict(expandedImg);
+
+            // Obtener el índice de la predicción con la mayor probabilidad
+            const maxIndex = predictions.argMax(1).dataSync()[0];
+
+            // Actualizar el texto en función de la predicción
+            const resultadoDiv = document.getElementById('resultado');
+            if (maxIndex === 0) {
+                resultadoDiv.textContent = 'Diástole';
+            } else if (maxIndex === 1) {
+                resultadoDiv.textContent = 'Sístole';
+            } else {
+                resultadoDiv.textContent = 'No se puede determinar';
+            }
+
+            // Manejar las predicciones (aquí puedes agregar lógica para mostrar resultados en la interfaz de usuario)
+            console.log(predictions);
+
+            // Liberar la memoria de los tensores
+            img.dispose();
+            resizedImg.dispose();
+            expandedImg.dispose();
+        }
+
+        // Llamar a la función 'run' cuando la página se cargue completamente
+        async function run() {
+            const model = await loadModel();
+            const canvas = document.getElementById('canvas');
+
+            // Acceder a la cámara del usuario
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    var video = document.getElementById('video');
+                    video.srcObject = stream;
+                })
+                .catch(function(err) {
+                    console.log("Error al acceder a la cámara: " + err);
+                });
+
+            // Capturar una imagen del flujo de la cámara y procesarla cada segundo
+            setInterval(() => {
+                var video = document.getElementById('video');
+                var canvas = document.getElementById('canvas');
+                var context = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                processImage(model, canvas);
+            }, 1000);
+        }
+
+        // Ejecutar la función 'run' cuando la página se cargue completamente
+        document.addEventListener('DOMContentLoaded', run);
+    </script>
+</body>
+</html>
